@@ -1,9 +1,2 @@
-G
-R1 No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
-No No No No No No No No 
+0
+5 3

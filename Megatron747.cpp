@@ -220,9 +220,12 @@ public:
     int getAtoms(int i, int j) {
         return s[i][j][1]-'0';
     }
+
+    void alterPlayers() {
+        swap(cur, other);
+    }
 };
 
-const int MAX_DEPTH = 3;
 class Megatron747 {
     int botVersion;
     char me, other;
@@ -261,38 +264,61 @@ class Megatron747 {
 
     typedef pair<Cell,int>PCI;
 
-    PCI goDeeperMin(Grid& gr, int level) {
+
+    int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
-        /// minimizes score2
-        vector<Cell>vc;
-        int mn = MAX_SCORE*2;
+        /// maximizes score2
+        gr.alterPlayers();
+//        assert(depth!=0);
+        if (depth==0) {
+            gr.alterPlayers();
+            return gr.score1();
+        }
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==other) {
+                    Grid tmp(gr);
+                    tmp.addAtom(Cell(i, j));
+
+                    int score = goDeeperMax(tmp, depth-1, alpha, beta);
+
+                    if (score < beta) beta = score;
+                    if (alpha >= beta) return beta;
+                }
+            }
+        }
+        return beta;
+    }
+
+
+    int goDeeperMax(Grid& gr, int depth, int alpha, int beta) {
+        /// greedily make move to the cell which
+        /// maximizes score2
+        gr.alterPlayers();
+        if (depth==0) {
+            return gr.score1();
+        }
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j));
 
-                    int score2;
-                    if (level==MAX_DEPTH) score2 = tmp.score1();
-                    else score2 = goDeeperMax(tmp, level+1).second;
+                    int score = goDeeperMin(tmp, depth-1, alpha, beta);
 
-                    if (score2 < mn) {
-                        mn = score2;
-                        vc.clear();
-                    }
-                    if (mn==score2) vc.emplace_back(i, j);
+                    if (score > alpha) alpha = score;
+                    if (alpha >= beta) return alpha;
                 }
             }
         }
-
-        assert(vc.size() > 0);
-        int idx = rand()%((int)vc.size());
-        return PCI(vc[idx], mn);
+        return alpha;
     }
 
-    PCI goDeeperMax(Grid& gr, int level) {
+    const int MAX_DEPTH = 2;
+    Cell bot21() {
         /// greedily make move to the cell which
         /// maximizes score2
+
         vector<Cell>vc;
         int mx = -MAX_SCORE*2;
         for (int i = 0; i < DIM; i++) {
@@ -300,40 +326,23 @@ class Megatron747 {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j));
-
-                    int score2;
-                    if (level==MAX_DEPTH) score2 = tmp.score1();
-                    else score2 = goDeeperMin(tmp, level+1).second;
-
-                    if (score2 > mx) {
-                        mx = score2;
+                    int score = goDeeperMin(tmp, MAX_DEPTH, -MAX_SCORE, MAX_SCORE);
+                    if (score > mx) {
+                        mx = score;
                         vc.clear();
                     }
-                    if (mx==score2) vc.emplace_back(i, j);
+                    if (mx==score) vc.emplace_back(i, j);
                 }
             }
         }
 
+        cout << "max score " << mx << " found "
+            << vc.size() << " cells" << endl;
+
         assert(vc.size() > 0);
         int idx = rand()%((int)vc.size());
-        return PCI(vc[idx], mx);
-    }
-
-    Cell bot21() {
-        /// greedily make move to the cell which
-        /// maximizes score2
-//        int possible = 0;
-//        for (int i = 0; i < DIM; i++) {
-//            for (int j = 0; j < DIM; j++) {
-//                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me)
-//                    possible++;
-//            }
-//        }
-//        if (possible > 45) return bot12();
-//        if (possible > 15) return bot13();
-        cout << "go deeper!!" << endl;
-        Grid tmp(gr);
-        return goDeeperMax(tmp, 0).first;
+        cout << idx << endl;
+        return vc[idx];
     }
 
     Cell bot13() {
