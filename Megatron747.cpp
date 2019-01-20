@@ -9,6 +9,13 @@ struct Cell {
     int x, y;
     Cell():x(0), y(0) { }
     Cell(int x, int y):x(x), y(y) {}
+    bool operator==(const Cell& c) const {
+        return x==c.x&&y==c.y;
+    }
+    bool operator<(const Cell& c) const {
+        if (x==c.x) return y < c.y;
+        return x < c.x;
+    }
 };
 
 Cell operator+(const Cell &p1, const Cell &p2)
@@ -240,12 +247,47 @@ public:
 
 const int MIN_DEPTH = 2;
 const int MAX_DEPTH = 5;
+const int MAX_KILL = 10;
 
 class Megatron747 {
     int botVersion;
     char me, other;
     Grid gr;
-    set<Cell>killerMoves[MAX_DEPTH+2];
+
+    vector<Cell>killerMoves[MAX_DEPTH+2];
+    vector<int>efficiency[MAX_DEPTH+2];
+
+    void updateKill(Cell c, int depth) {
+//        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
+        for (int i = 0; i < killerMoves[depth].size(); i++) {
+            if (killerMoves[depth][i]==c) {
+                efficiency[depth][i]++;
+                return;
+            }
+        }
+
+        if (killerMoves[depth].size() < MAX_KILL) {
+            killerMoves[depth].push_back(c);
+            efficiency[depth].push_back(1);
+            return;
+        }
+
+        int mnid = 0;
+        for (int i = 1; i < killerMoves[depth].size(); i++) {
+            if (efficiency[depth][i] < efficiency[depth][mnid]) {
+                mnid = i;
+            }
+        }
+        killerMoves[depth][mnid] = c;
+        efficiency[depth][mnid] = 1;
+    }
+
+    void clearKill() {
+        for (int i = 0; i <= MAX_DEPTH; i++) {
+            killerMoves[i].clear();
+            efficiency[i].clear();
+        }
+    }
 
     bool readFile() {
         ifstream in;
@@ -297,16 +339,43 @@ class Megatron747 {
             return gr.score1();
         }
 
+        set<Cell>done;
+        for (int i = 0; i < killerMoves[depth].size(); i++) {
+            Cell k = killerMoves[depth][i];
+            if (gr.isEmpty(k.x, k.y)||gr.getPlayer(k.x, k.y)==other) {
+                done.insert(k);
+
+                Grid tmp(gr);
+                tmp.addAtom(k);
+
+                int score = goDeeperMax(tmp, depth+1, alpha, beta);
+
+                if (score < beta) beta = score;
+                if (alpha >= beta) {
+                    efficiency[depth][i]++;
+                    return beta;
+                } else {
+                    efficiency[depth][i]--;
+                }
+            }
+        }
+
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==other) {
+                    Cell now = Cell(i, j);
+                    if (done.count(now) > 0) continue;
+
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
+                    tmp.addAtom(now);
 
                     int score = goDeeperMax(tmp, depth+1, alpha, beta);
 
                     if (score < beta) beta = score;
-                    if (alpha >= beta) return beta;
+                    if (alpha >= beta) {
+                        updateKill(now, depth);
+                        return beta;
+                    }
                 }
             }
         }
@@ -325,16 +394,44 @@ class Megatron747 {
             return gr.score1();
         }
 
+        set<Cell>done;
+        for (int i = 0; i < killerMoves[depth].size(); i++) {
+            Cell k = killerMoves[depth][i];
+            if (gr.isEmpty(k.x, k.y)||gr.getPlayer(k.x, k.y)==me) {
+                done.insert(k);
+
+                Grid tmp(gr);
+                tmp.addAtom(k);
+
+                int score = goDeeperMin(tmp, depth+1, alpha, beta);
+
+                if (score > alpha) alpha = score;
+                if (alpha >= beta) {
+                    efficiency[depth][i]++;
+                    return alpha;
+                } else {
+                    efficiency[depth][i]--;
+                }
+            }
+        }
+
+
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
+                    Cell now = Cell(i, j);
+                    if (done.count(now) > 0) continue;
+
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
+                    tmp.addAtom(now);
 
                     int score = goDeeperMin(tmp, depth+1, alpha, beta);
 
                     if (score > alpha) alpha = score;
-                    if (alpha >= beta) return alpha;
+                    if (alpha >= beta) {
+                        updateKill(now, depth);
+                        return alpha;
+                    }
                 }
             }
         }
@@ -391,17 +488,16 @@ class Megatron747 {
         while (time_out == false && ++depth <= MAX_DEPTH) {
             p = bot21(depth);
             if (time_out) break;
-            if (time_out==false||p.second > mx) {
-                cout << "went " << depth << " steps deeper!" << endl;
-                bestMove = p.first;
-                mx = p.second;
-            }
+            cout << "went " << depth << " steps deeper!" << endl;
+            bestMove = p.first;
+            mx = p.second;
         }
 
         auto current_time = chrono::high_resolution_clock::now();
         int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
         cout << "made move after " << elapsed << " milis" << endl;
 
+        clearKill();
         if (mx==-MAX_SCORE) return bot0();
 
         return bestMove;
@@ -536,11 +632,12 @@ public:
     }
 };
 
+const int DEFAULT_BOT = 31;
 int main(int argc, char *argv[])
 {
     srand(time(0));
 
-    int v = 0;
+    int v = DEFAULT_BOT;
     if (argc > 2) v = atoi(argv[2]);
     Megatron747 mt747(argv[1][0], v);
 
