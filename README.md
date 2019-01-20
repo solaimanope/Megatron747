@@ -12,3 +12,5 @@ bot13 -> this is basically bot12 but with modified (intutively better) heuristic
 
 
 bot21 -> 3 steps deeper with bot11
+
+bot31 -> arbitrary steps deeper with bot21. The number of steps will be determined from time limit.
