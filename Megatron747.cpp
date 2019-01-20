@@ -224,6 +224,18 @@ public:
     void alterPlayers() {
         swap(cur, other);
     }
+
+    bool gameEnded() {
+        int cc = 0;
+        int oc = 0;
+        for (VS v : s) {
+            for (string p : v) {
+                if (p[0]==cur) cc++;
+                else if (p[0]==other) oc++;
+            }
+        }
+        return cc==0||oc==0;
+    }
 };
 
 class Megatron747 {
@@ -270,7 +282,7 @@ class Megatron747 {
         /// maximizes score2
         gr.alterPlayers();
 //        assert(depth!=0);
-        if (depth==0) {
+        if (depth==0||gr.gameEnded()) {
             gr.alterPlayers();
             return gr.score1();
         }
@@ -295,7 +307,7 @@ class Megatron747 {
         /// greedily make move to the cell which
         /// maximizes score2
         gr.alterPlayers();
-        if (depth==0) {
+        if (depth==0||gr.gameEnded()) {
             return gr.score1();
         }
         for (int i = 0; i < DIM; i++) {
@@ -318,7 +330,7 @@ class Megatron747 {
     Cell bot21() {
         /// greedily make move to the cell which
         /// maximizes score2
-
+        auto start_time = chrono::high_resolution_clock::now();
         vector<Cell>vc;
         int mx = -MAX_SCORE*2;
         for (int i = 0; i < DIM; i++) {
@@ -335,13 +347,18 @@ class Megatron747 {
                 }
             }
         }
-
         cout << "max score " << mx << " found "
             << vc.size() << " cells" << endl;
 
         assert(vc.size() > 0);
         int idx = rand()%((int)vc.size());
         cout << idx << endl;
+
+        auto current_time = chrono::high_resolution_clock::now();
+
+        cout << "Time taken: " << chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count()
+            << " milliseconds" << endl;
+
         return vc[idx];
     }
 
