@@ -1,0 +1,3 @@
+possible improvements
+
+1. When found losing score return a random cell instead of the found best cell
