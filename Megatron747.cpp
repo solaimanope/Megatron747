@@ -238,6 +238,7 @@ public:
     }
 };
 
+const int MIN_DEPTH = 2;
 class Megatron747 {
     int botVersion;
     char me, other;
@@ -276,13 +277,19 @@ class Megatron747 {
 
     typedef pair<Cell,int>PCI;
 
+    chrono::time_point<chrono::system_clock> start_time = chrono::high_resolution_clock::now();
+    const int TIME_LIMIT = 2500;
+    bool time_out;
 
     int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score2
         gr.alterPlayers();
 //        assert(depth!=0);
-        if (depth==0||gr.gameEnded()) {
+        auto current_time = chrono::high_resolution_clock::now();
+        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
+        if (depth==0||gr.gameEnded()||elapsed>TIME_LIMIT) {
+            if (elapsed > TIME_LIMIT) time_out = true;
             gr.alterPlayers();
             return gr.score1();
         }
@@ -307,7 +314,10 @@ class Megatron747 {
         /// greedily make move to the cell which
         /// maximizes score2
         gr.alterPlayers();
-        if (depth==0||gr.gameEnded()) {
+        auto current_time = chrono::high_resolution_clock::now();
+        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
+        if (depth==0||gr.gameEnded()||elapsed>TIME_LIMIT) {
+            if (elapsed > TIME_LIMIT) time_out = true;
             return gr.score1();
         }
         for (int i = 0; i < DIM; i++) {
@@ -326,11 +336,10 @@ class Megatron747 {
         return alpha;
     }
 
-    const int MAX_DEPTH = 2;
-    Cell bot21() {
+    Cell bot21(int depth = MIN_DEPTH) {
         /// greedily make move to the cell which
         /// maximizes score2
-        auto start_time = chrono::high_resolution_clock::now();
+
         vector<Cell>vc;
         int mx = -MAX_SCORE*2;
         for (int i = 0; i < DIM; i++) {
@@ -338,7 +347,7 @@ class Megatron747 {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j));
-                    int score = goDeeperMin(tmp, MAX_DEPTH, -MAX_SCORE, MAX_SCORE);
+                    int score = goDeeperMin(tmp, depth, -MAX_SCORE, MAX_SCORE);
                     if (score > mx) {
                         mx = score;
                         vc.clear();
@@ -347,19 +356,34 @@ class Megatron747 {
                 }
             }
         }
-        cout << "max score " << mx << " found "
+
+        cout << "depth " << depth << " max score " << mx << " found "
             << vc.size() << " cells" << endl;
 
         assert(vc.size() > 0);
         int idx = rand()%((int)vc.size());
-        cout << idx << endl;
-
-        auto current_time = chrono::high_resolution_clock::now();
-
-        cout << "Time taken: " << chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count()
-            << " milliseconds" << endl;
+//        cout << idx << endl;
 
         return vc[idx];
+    }
+
+    const int MAX_DEPTH = 5;
+    Cell bot31() {
+        /// iterative deepening of bot21
+        start_time = chrono::high_resolution_clock::now();
+        int depth = 2;
+        time_out = false;
+        Cell bestMove = bot21(depth);
+        while (time_out == false && ++depth <= MAX_DEPTH) {
+            Cell tmp = bot21(depth);
+            if (time_out) break;
+            cout << "went " << depth << " steps deeper!" << endl;
+            bestMove = tmp;
+        }
+        auto current_time = chrono::high_resolution_clock::now();
+        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
+        cout << "made move after " << elapsed << " milis" << endl;
+        return bestMove;
     }
 
     Cell bot13() {
@@ -469,6 +493,7 @@ class Megatron747 {
         if (botVersion==12) return bot12();
         if (botVersion==13) return bot13();
         if (botVersion==21) return bot21();
+        if (botVersion==31) return bot31();
         assert(false);
     }
 
