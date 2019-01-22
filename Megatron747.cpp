@@ -62,7 +62,7 @@ class Grid {
             loop++;
             if (loop > MAX_LOOP) {
                 cout << "Loop more than " << MAX_LOOP << endl;
-                return;
+                break;
             }
             assert(unstable.size() < DIM*DIM);
             Cell p = unstable.front();
@@ -87,6 +87,7 @@ class Grid {
                 addAtom(d, cur, true);
             }
         }
+        while (unstable.size()) unstable.pop();
     }
 
 
@@ -95,7 +96,7 @@ public:
 
     }
 
-    void addAtom(Cell p, char cur, bool fromUpdate = false) {
+    void addAtom(Cell p, char cur, bool fromUpdate) {
         if (s[p.x][p.y]=="No") {
             s[p.x][p.y][0] = cur;
             s[p.x][p.y][1] = '1';
@@ -278,7 +279,7 @@ class Megatron747 {
                 done.insert(k);
 
                 Grid tmp(gr);
-                tmp.addAtom(k, other);
+                tmp.addAtom(k, other, false);
 
                 int score = goDeeperMax(tmp, depth+1, alpha, beta);
 
@@ -299,7 +300,7 @@ class Megatron747 {
                     if (done.count(now) > 0) continue;
 
                     Grid tmp(gr);
-                    tmp.addAtom(now, other);
+                    tmp.addAtom(now, other, false);
 
                     int score = goDeeperMax(tmp, depth+1, alpha, beta);
 
@@ -329,7 +330,7 @@ class Megatron747 {
                 done.insert(k);
 
                 Grid tmp(gr);
-                tmp.addAtom(k, me);
+                tmp.addAtom(k, me, false);
 
                 int score = goDeeperMin(tmp, depth+1, alpha, beta);
 
@@ -351,7 +352,7 @@ class Megatron747 {
                     if (done.count(now) > 0) continue;
 
                     Grid tmp(gr);
-                    tmp.addAtom(now, me);
+                    tmp.addAtom(now, me, false);
 
                     int score = goDeeperMin(tmp, depth+1, alpha, beta);
 
@@ -397,7 +398,7 @@ class Megatron747 {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j), me);
+                    tmp.addAtom(Cell(i, j), me, false);
                     int score = goDeeperMin(tmp, 0, -MAX_SCORE, MAX_SCORE);
                     if (score > mx) {
                         mx = score;
@@ -443,7 +444,7 @@ class Megatron747 {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j), me);
+                    tmp.addAtom(Cell(i, j), me, false);
                     int score1 = tmp.score1(me);
 //                    cout << score1 << " for " << i << " " << j << endl;
                     if (score1 > mx) {
