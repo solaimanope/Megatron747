@@ -23,6 +23,14 @@ Cell operator+(const Cell &p1, const Cell &p2)
     return Cell(p1.x+p2.x, p1.y+p2.y);
 }
 
+struct Move {
+    Cell c;
+    int strength;
+    bool operator < (const Move& m) const {
+        return strength > m.strength;
+    }
+};
+
 vector< Cell >dir = {Cell(1, 0), Cell(-1, 0), Cell(0, 1), Cell(0, -1)};
 const int DIM = 8;
 const int MAX_SCORE = 10000;
@@ -32,8 +40,13 @@ class Grid {
 
     VVS s;
     queue< Cell >unstable;
-    char cur, other;
-    int vs[DIM][DIM];
+    int cnt[2];
+    /// 0 for R
+    /// 1 for G
+
+    int charToInt(char c) {
+        return c=='G';
+    }
 
     bool isValidCell(const Cell& p) {
         return 0 <= p.x && p.x < DIM && 0 <= p.y && p.y < DIM;
@@ -48,42 +61,27 @@ class Grid {
         return ans;
     }
 
-    bool enemyGone() {
-        for (VS v : s) {
-            for (string p : v) {
-                if (p=="No") continue;
-                if (p[0]!=cur) return false;
-            }
-        }
-        return true;
-    }
-    bool meGone() {
-        for (VS v : s) {
-            for (string p : v) {
-                if (p[0]==cur) return false;
-            }
-        }
-        return true;
-    }
-
     void update() {
         int loop = 0;
-        while (!unstable.empty() && !enemyGone()) {
+        while (!unstable.empty() && !gameEnded()) {
             loop++;
             if (loop > MAX_LOOP) {
                 cout << "Loop more than " << MAX_LOOP << endl;
-                return;
+                break;
             }
+
             assert(unstable.size() < DIM*DIM);
             Cell p = unstable.front();
             unstable.pop();
 
+            char cur = s[p.x][p.y][0];
             int atom = s[p.x][p.y][1]-'0';
             int react = neighbourCount(p);
             assert(react <= atom);
 
             if (react==atom) {
                 s[p.x][p.y] = "No";
+                cnt[charToInt(cur)]--;
             } else {
                 int tmp = atom-react;
                 if (tmp >= react) unstable.push(p);
@@ -93,64 +91,33 @@ class Grid {
             for (Cell d : dir) {
                 d = d+p;
                 if (!isValidCell(d)) continue;
-                addAtom(d, true);
+                addAtom(d, cur, true);
             }
         }
+        while (unstable.size()) unstable.pop();
     }
-
-    bool flag;
-    int dfs(Cell c) {
-        vs[c.x][c.y] = 1;
-        int ans = 1;
-        for (Cell d : dir) {
-            d = d+c;
-            if (isValidCell(d)==false) continue;
-            if (s[d.x][d.y]=="No") continue;
-            if (s[d.x][d.y][0]!=cur) {
-                if (neighbourCount(d)-1==s[d.x][d.y][1]-'0') flag = true;
-                continue;
-            }
-            if (vs[d.x][d.y]) continue;
-            if (neighbourCount(d)-1==s[d.x][d.y][1]-'0')
-                ans += dfs(d);
-        }
-        return ans;
-    }
-
-    int chainLengthSum(int version) {
-        int ans = 0;
-        memset(vs, 0, sizeof vs);
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (s[i][j][0]!=cur) continue;
-                if (vs[i][j]) continue;
-                Cell now(i, j);
-                if (neighbourCount(now)-1==s[i][j][1]-'0') {
-                    flag = false;
-                    int l = dfs(now);
-                    if (l > 1) {
-                        if (flag) ans += l*2*version;
-                        else ans += l*2;
-                    }
-                }
-            }
-        }
-        return ans;
-    }
-
 
 
 public:
-    Grid(VVS s, char cur) : s(s), cur(cur) {
-        if (cur=='R') other = 'G';
-        else other = 'R';
+    Grid(VVS s) : s(s) {
+        clearCount();
     }
 
-    void addAtom(Cell p, bool fromUpdate = false) {
+    void clearCount() {
+        cnt[0] = cnt[1] = 0;
+    }
+
+    void addAtom(Cell p, char cur, bool fromUpdate = false) {
+        int player = charToInt(cur);
         if (s[p.x][p.y]=="No") {
             s[p.x][p.y][0] = cur;
             s[p.x][p.y][1] = '1';
+            cnt[player]++;
             return;
+        }
+        if (s[p.x][p.y][0]!=cur) {
+            cnt[player^1]--;
+            cnt[player]++;
         }
         s[p.x][p.y][0] = cur;
         s[p.x][p.y][1]++;
@@ -162,60 +129,47 @@ public:
 
     void setCell(int i, int j, string str) {
         s[i][j] = str;
+        if (s[i][j]!="No") cnt[charToInt(s[i][j][0])]++;
     }
 
-    int score1() {
-        /// calculate score for bot1
-        if (enemyGone()) return 10000;
-        if (meGone()) return -10000;
-        int ans = 0;
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (s[i][j][0]!=cur) continue;
-                int cnt = s[i][j][1]-'0';
-                assert(0 <= cnt);
-                ans += cnt;
-            }
-        }
-        return ans;
-    }
+    int scoreX(char player) {
+        int cp[2];
+        int xp[2];
+        cp[0] = cp[1] = xp[0] = xp[1] = 0;
 
-    int score2(int version) {
-        /// calculate score for bot1
-        int mine = 0;
-        int enemies = 0;
-        int ans = 0;
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
                 if (s[i][j]=="No") continue;
-                if (s[i][j][0]!=cur) {
-                    enemies += s[i][j][1]-'0';
-                    continue;
-                }
-                mine += s[i][j][1]-'0';
-                bool flag = true;
-                Cell now(i, j);
-                int ng = neighbourCount(now);
-                for (Cell d : dir) {
-                    d = d + now;
-                    if (isValidCell(d)==false) continue;
-                    if (s[d.x][d.y][0]==other&&s[d.x][d.y][1]-'0'==neighbourCount(d)-1) {
-                        ans -= 5-ng;
-                        flag = false;
-                    }
-                }
-                if (flag) {
-                    if (ng==3) ans += 2;
-                    if (ng==2) ans += 3;
-                    if (s[i][j][1]-'0'==ng-1) ans += 2;
+                char c = s[i][j][0];
+                cp[player==c]++;
+                if (s[i][j][1]-'0'==neighbourCount(Cell(i, j))-1) {
+                    xp[player==c]++;
                 }
             }
         }
-        ans += mine;
-        if (enemies == 0 && mine > 1) return MAX_SCORE;
-        if (mine == 0 && enemies > 1) return -MAX_SCORE;
-        ans += chainLengthSum(version);
-        return ans;
+
+        if (cp[1] > 0 && cp[0]==0) return MAX_SCORE;
+        if (cp[0] > 0 && cp[1]==0) return -MAX_SCORE;
+        return cp[1]-cp[0]+xp[1]-xp[0];
+    }
+
+    int score1(char player) {
+        /// calculate score for bot1
+
+        int cp[2];
+        cp[0] = cp[1] = 0;
+
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (s[i][j]=="No") continue;
+                char c = s[i][j][0];
+                cp[player==c] += s[i][j][1]-'0';
+            }
+        }
+
+        if (cp[1] > 0 && cp[0]==0) return MAX_SCORE;
+        if (cp[0] > 0 && cp[1]==0) return -MAX_SCORE;
+        return cp[1];
     }
 
     bool isEmpty(int i, int j) {
@@ -228,26 +182,20 @@ public:
         return s[i][j][1]-'0';
     }
 
-    void alterPlayers() {
-        swap(cur, other);
-    }
-
     bool gameEnded() {
-        int cc = 0;
-        int oc = 0;
-        for (VS v : s) {
-            for (string p : v) {
-                if (p[0]==cur) cc++;
-                else if (p[0]==other) oc++;
-            }
-        }
-        return cc==0||oc==0;
+        return cnt[0]==0||cnt[1]==0;
     }
 };
 
 const int MIN_DEPTH = 2;
 const int MAX_DEPTH = 5;
 const int MAX_KILL = 10;
+
+char otherPlayer(char now)
+{
+    if (now=='R') return 'G';
+    return 'R';
+}
 
 class Megatron747 {
     int botVersion;
@@ -298,6 +246,7 @@ class Megatron747 {
             in.close();
             return false;
         }
+        gr.clearCount();
         cout << "reading" << endl;
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
@@ -326,17 +275,21 @@ class Megatron747 {
     bool time_out;
     int allowedDepth;
 
+//    int evaluate(Grid& gr, int depth, int alpha, int beta) {
+//
+//        for (int i = 0; i < )
+//
+//    }
+
     int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score2
-        gr.alterPlayers();
 //        assert(depth!=0);
         auto current_time = chrono::high_resolution_clock::now();
         int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
         if (depth==allowedDepth||gr.gameEnded()||elapsed>TIME_LIMIT) {
             if (elapsed > TIME_LIMIT) time_out = true;
-            gr.alterPlayers();
-            return gr.score1();
+            return gr.score1(me);
         }
 
         set<Cell>done;
@@ -346,7 +299,7 @@ class Megatron747 {
                 done.insert(k);
 
                 Grid tmp(gr);
-                tmp.addAtom(k);
+                tmp.addAtom(k, other);
 
                 int score = goDeeperMax(tmp, depth+1, alpha, beta);
 
@@ -367,7 +320,7 @@ class Megatron747 {
                     if (done.count(now) > 0) continue;
 
                     Grid tmp(gr);
-                    tmp.addAtom(now);
+                    tmp.addAtom(now, other);
 
                     int score = goDeeperMax(tmp, depth+1, alpha, beta);
 
@@ -386,12 +339,11 @@ class Megatron747 {
     int goDeeperMax(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score2
-        gr.alterPlayers();
         auto current_time = chrono::high_resolution_clock::now();
         int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
         if (depth==allowedDepth||gr.gameEnded()||elapsed>TIME_LIMIT) {
             if (elapsed > TIME_LIMIT) time_out = true;
-            return gr.score1();
+            return gr.score1(me);
         }
 
         set<Cell>done;
@@ -401,7 +353,7 @@ class Megatron747 {
                 done.insert(k);
 
                 Grid tmp(gr);
-                tmp.addAtom(k);
+                tmp.addAtom(k, me);
 
                 int score = goDeeperMin(tmp, depth+1, alpha, beta);
 
@@ -423,7 +375,7 @@ class Megatron747 {
                     if (done.count(now) > 0) continue;
 
                     Grid tmp(gr);
-                    tmp.addAtom(now);
+                    tmp.addAtom(now, me);
 
                     int score = goDeeperMin(tmp, depth+1, alpha, beta);
 
@@ -454,7 +406,7 @@ class Megatron747 {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
+                    tmp.addAtom(Cell(i, j), me);
                     int score = goDeeperMin(tmp, 0, -MAX_SCORE, MAX_SCORE);
                     if (score > mx) {
                         mx = score;
@@ -499,66 +451,7 @@ class Megatron747 {
 
         clearKill();
         if (mx==-MAX_SCORE) return bot0();
-
         return bestMove;
-    }
-
-    Cell bot13() {
-        /// greedily make move to the cell which
-        /// maximizes score2
-        vector<Cell>vc;
-        int mx = -MAX_SCORE*2;
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
-                    Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
-                    int score2 = tmp.score2(0);
-                    if (score2 > mx) {
-                        mx = score2;
-                        vc.clear();
-                    }
-                    if (mx==score2) vc.emplace_back(i, j);
-                }
-            }
-        }
-
-        cout << "max score " << mx << " found "
-            << vc.size() << " cells" << endl;
-
-        assert(vc.size() > 0);
-        int idx = rand()%((int)vc.size());
-        cout << idx << endl;
-        return vc[idx];
-    }
-
-    Cell bot12() {
-        /// greedily make move to the cell which
-        /// maximizes score2
-        vector<Cell>vc;
-        int mx = -MAX_SCORE*2;
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
-                    Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
-                    int score2 = tmp.score2(1);
-                    if (score2 > mx) {
-                        mx = score2;
-                        vc.clear();
-                    }
-                    if (mx==score2) vc.emplace_back(i, j);
-                }
-            }
-        }
-
-        cout << "max score " << mx << " found "
-            << vc.size() << " cells" << endl;
-
-        assert(vc.size() > 0);
-        int idx = rand()%((int)vc.size());
-        cout << idx << endl;
-        return vc[idx];
     }
 
     Cell bot11() {
@@ -570,8 +463,8 @@ class Megatron747 {
             for (int j = 0; j < DIM; j++) {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
-                    tmp.addAtom(Cell(i, j));
-                    int score1 = tmp.score1();
+                    tmp.addAtom(Cell(i, j), me);
+                    int score1 = tmp.score1(me);
 //                    cout << score1 << " for " << i << " " << j << endl;
                     if (score1 > mx) {
                         mx = score1;
@@ -607,8 +500,6 @@ class Megatron747 {
     Cell makeMove() {
         if (botVersion==0) return bot0();
         if (botVersion==11) return bot11();
-        if (botVersion==12) return bot12();
-        if (botVersion==13) return bot13();
         if (botVersion==21) return bot21().first;
         if (botVersion==31) return bot31();
         assert(false);
@@ -623,11 +514,10 @@ class Megatron747 {
     }
 
 public:
-    Megatron747(char me, int botVersion):gr(VVS(DIM, VS(DIM)), me) {
+    Megatron747(char me, int botVersion):gr(VVS(DIM, VS(DIM))) {
         this->me = me;
         this->botVersion = botVersion;
-        if (me=='R') other = 'G';
-        else other = 'R';
+        this->other = otherPlayer(me);
         run();
     }
 };
