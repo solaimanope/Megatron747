@@ -7,7 +7,7 @@ typedef vector< VS >VVS;
 
 struct Cell {
     int x, y;
-    Cell():x(0), y(0) { }
+    Cell():x(-1), y(-1) { }
     Cell(int x, int y):x(x), y(y) {}
     bool operator==(const Cell& c) const {
         return x==c.x&&y==c.y;
@@ -34,9 +34,12 @@ struct Move {
 vector< Cell >dir = {Cell(1, 0), Cell(-1, 0), Cell(0, 1), Cell(0, -1)};
 const int DIM = 8;
 const int MAX_SCORE = 10000;
+//const int MAX_HASH = 100003;
+const int MAX_HASH = 10007;
 
 class Grid {
     const int MAX_LOOP = 1000;
+    const int PRIME_FACTOR = 997;
 
     VVS s;
     queue< Cell >unstable;
@@ -157,6 +160,19 @@ public:
         }
         return cc==0||oc==0;
     }
+
+    int getHashValue() {
+        int ans = 0;
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                for (char c : s[i][j]) {
+                    ans += (ans*PRIME_FACTOR)%MAX_HASH+c;
+                    ans %= MAX_HASH;
+                }
+            }
+        }
+        return ans;
+    }
 };
 
 const int MIN_DEPTH = 2;
@@ -190,7 +206,19 @@ public:
     }
 };
 
+struct Info {
+    Cell bestMove;
+    int score, alpha, beta;
+    Info() {}
+    Info(Cell bestMove, int score, int alpha, int beta) :
+        bestMove(bestMove), score(score), alpha(alpha), beta(beta) {
+
+    }
+};
+
 class Megatron747 {
+    const int HASH_OFFSET = 2;
+
     Timer timer;
 
     int botVersion;
@@ -199,6 +227,8 @@ class Megatron747 {
 
     vector<Cell>killerMoves[MAX_DEPTH+2];
     vector<int>efficiency[MAX_DEPTH+2];
+
+    Info ttable[2][MAX_DEPTH+2][MAX_HASH];
 
     void addKill(Cell c, int depth) {
 //        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
@@ -260,7 +290,7 @@ class Megatron747 {
     }
 
 
-    void clearKill() {
+    void clearShit() {
         for (int i = 0; i <= MAX_DEPTH; i++) {
             killerMoves[i].clear();
             efficiency[i].clear();
@@ -301,9 +331,22 @@ class Megatron747 {
     int allowedDepth;
 
     void getMoves(Grid &gr, int depth, vector<Move> &moves) {
+        int _v = depth&1;
         char currentPlayer;
-        if (depth&1) currentPlayer = me;
+
+        if (_v) currentPlayer = me;
         else currentPlayer = other;
+
+
+        int boardHash = gr.getHashValue();
+
+        Cell tt;
+        for (int idx = MAX_DEPTH-1; idx >= 0; idx--) {
+            Info in = ttable[_v][idx][boardHash];
+            if (in.bestMove.x==-1) continue;
+            tt = in.bestMove;
+            break;
+        }
 
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
@@ -313,6 +356,7 @@ class Megatron747 {
                     mv.strength = 0;
 
                     mv.strength += killerScore(mv.c, depth);
+                    if (i==tt.x&&j==tt.y) mv.strength += MAX_KILL*2;
 
                     moves.push_back(mv);
                 }
@@ -322,26 +366,60 @@ class Megatron747 {
         sort(moves.begin(), moves.end());
     }
 
+    vector< Cell >stck;
     int heuristic(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score1
+        int _v = depth&1;
+
         char currentPlayer;
-        if (depth&1) currentPlayer = me;
+        if (_v) currentPlayer = me;
         else currentPlayer = other;
 
         if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
             return gr.score1(me);
         }
 
+        int boardHash = gr.getHashValue();
+        int height = allowedDepth-1-depth;
+
+//        if (height >= HASH_OFFSET) {
+//            height -= HASH_OFFSET;
+//            int idx;
+//            for (idx = MAX_DEPTH; idx >= height; idx--) {
+//                if (ttable[_v][idx][boardHash].bestMove.x!=-1) {
+//                    Info in = ttable[_v][idx][boardHash];
+//                    if (in.alpha >= in.beta) return in.score;
+//                    if (_v) alpha = max(alpha, in.alpha);
+//                    else beta = min(beta, in.beta);
+//                    break;
+//                }
+//            }
+//        }
+
         vector<Move>moves;
         getMoves(gr, depth, moves);
+
+        Cell bestMove;
+        int mx = -MAX_SCORE, mn = MAX_SCORE;
 
         for (Move m : moves) {
             Cell now = m.c;
             Grid tmp(gr);
             tmp.addAtom(now, currentPlayer, false);
 
+            stck.push_back(now);
             int score = heuristic(tmp, depth+1, alpha, beta);
+            stck.pop_back();
+
+            if (currentPlayer==me&&score>mx) {
+                mx = score;
+                bestMove = now;
+            }
+            if (currentPlayer!=me&&score<mn) {
+                mn = score;
+                bestMove = now;
+            }
 
             if (currentPlayer==me&&score>alpha) alpha = score;
             if (currentPlayer!=me&&score<beta)  beta  = score;
@@ -354,8 +432,19 @@ class Megatron747 {
             }
         }
 
-        if (currentPlayer==me)  return alpha;
-        else                    return beta;
+        if (_v)  {
+//            if (height >= HASH_OFFSET) {
+                ttable[1][height][boardHash] =
+                    Info(bestMove, mx, alpha, beta);
+//            }
+            return alpha;
+        } else {
+//            if (height >= HASH_OFFSET) {
+                ttable[0][height][boardHash] =
+                    Info(bestMove, mn, alpha, beta);
+//            }
+            return beta;
+        }
     }
 
     Cell bot21(int depth = MIN_DEPTH) {
@@ -369,7 +458,9 @@ class Megatron747 {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j), me, false);
+                    stck.push_back(Cell(i, j));
                     int score = heuristic(tmp, 0, -MAX_SCORE, MAX_SCORE);
+                    stck.pop_back();
                     if (score > mx) {
                         mx = score;
                         vc.clear();
@@ -392,7 +483,7 @@ class Megatron747 {
     Cell bot31() {
         /// iterative deepening of bot21
 
-        int depth = MIN_DEPTH;
+        int depth = 0;
         Cell bestMove = bot21(depth);
 
         while (!timer.timesUp() && ++depth <= MAX_DEPTH) {
@@ -449,7 +540,7 @@ class Megatron747 {
 
     Cell makeMove() {
         timer.startTimer();
-        clearKill();
+        clearShit();
 
         Cell mv;
         if (botVersion==0) mv = bot0();
@@ -485,6 +576,7 @@ const int DEFAULT_BOT = 31;
 int main(int argc, char *argv[])
 {
     srand(time(0));
+    cout << argv[1][0] << " started!" << endl;
 
     int v = DEFAULT_BOT;
     if (argc > 2) v = atoi(argv[2]);
