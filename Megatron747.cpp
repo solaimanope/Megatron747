@@ -197,7 +197,30 @@ char otherPlayer(char now)
     return 'R';
 }
 
+class Timer {
+    const int TIME_LIMIT = 2500;
+    chrono::time_point<chrono::system_clock> start_time, current_time;
+
+public:
+    Timer() {}
+
+    void startTimer() {
+        start_time = chrono::high_resolution_clock::now();
+    }
+
+    int elapsedMilis() {
+        current_time = chrono::high_resolution_clock::now();
+        return chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
+    }
+
+    bool timesUp() {
+        return elapsedMilis() > TIME_LIMIT;
+    }
+};
+
 class Megatron747 {
+    Timer timer;
+
     int botVersion;
     char me, other;
     Grid gr;
@@ -269,10 +292,6 @@ class Megatron747 {
         out.close();
     }
 
-
-    chrono::time_point<chrono::system_clock> start_time = chrono::high_resolution_clock::now();
-    const int TIME_LIMIT = 2500;
-    bool time_out;
     int allowedDepth;
 
 //    int evaluate(Grid& gr, int depth, int alpha, int beta) {
@@ -284,11 +303,8 @@ class Megatron747 {
     int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score2
-//        assert(depth!=0);
-        auto current_time = chrono::high_resolution_clock::now();
-        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
-        if (depth==allowedDepth||gr.gameEnded()||elapsed>TIME_LIMIT) {
-            if (elapsed > TIME_LIMIT) time_out = true;
+
+        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
             return gr.score1(me);
         }
 
@@ -338,11 +354,8 @@ class Megatron747 {
 
     int goDeeperMax(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
-        /// maximizes score2
-        auto current_time = chrono::high_resolution_clock::now();
-        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
-        if (depth==allowedDepth||gr.gameEnded()||elapsed>TIME_LIMIT) {
-            if (elapsed > TIME_LIMIT) time_out = true;
+        /// maximizes score1
+        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
             return gr.score1(me);
         }
 
@@ -394,11 +407,6 @@ class Megatron747 {
     PCI bot21(int depth = MIN_DEPTH) {
         /// greedily make move to the cell which
         /// maximizes score2
-        if (depth==MIN_DEPTH) {
-            ///direct call to bot21
-            time_out = false;
-            start_time = chrono::high_resolution_clock::now();
-        }
         allowedDepth = depth;
         vector<Cell>vc;
         int mx = -MAX_SCORE*2;
@@ -429,29 +437,52 @@ class Megatron747 {
 
     Cell bot31() {
         /// iterative deepening of bot21
-        time_out = false;
-        start_time = chrono::high_resolution_clock::now();
 
         int depth = MIN_DEPTH;
         PCI p = bot21(depth);
         Cell bestMove = p.first;
         int mx = p.second;
 
-        while (time_out == false && ++depth <= MAX_DEPTH) {
+        while (!timer.timesUp() && ++depth <= MAX_DEPTH) {
             p = bot21(depth);
-            if (time_out) break;
+            if (timer.timesUp()) break;
             cout << "went " << depth << " steps deeper!" << endl;
             bestMove = p.first;
             mx = p.second;
         }
 
-        auto current_time = chrono::high_resolution_clock::now();
-        int elapsed = chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count();
-        cout << "made move after " << elapsed << " milis" << endl;
-
         clearKill();
         if (mx==-MAX_SCORE) return bot0();
         return bestMove;
+    }
+
+    Cell bot14() {
+        /// greedily make move to the cell which
+        /// maximizes my color
+        vector<Cell>vc;
+        int mx = -MAX_SCORE*2;
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
+                    Grid tmp(gr);
+                    tmp.addAtom(Cell(i, j), me);
+                    int score1 = tmp.scoreX(me);
+//                    cout << score1 << " for " << i << " " << j << endl;
+                    if (score1 > mx) {
+                        mx = score1;
+                        vc.clear();
+                    }
+                    if (mx==score1) vc.emplace_back(i, j);
+                }
+            }
+        }
+
+        cout << "max score " << mx << " found "
+            << vc.size() << " cells" << endl;
+
+        assert(vc.size() > 0);
+        int idx = rand()%((int)vc.size());
+        return vc[idx];
     }
 
     Cell bot11() {
@@ -498,11 +529,19 @@ class Megatron747 {
     }
 
     Cell makeMove() {
-        if (botVersion==0) return bot0();
-        if (botVersion==11) return bot11();
-        if (botVersion==21) return bot21().first;
-        if (botVersion==31) return bot31();
-        assert(false);
+        timer.startTimer();
+
+        Cell mv;
+        if (botVersion==0) mv = bot0();
+        else if (botVersion==11) mv = bot11();
+        else if (botVersion==14) mv = bot14();
+        else if (botVersion==21) mv = bot21().first;
+        else if (botVersion==31) mv = bot31();
+        else assert(false);
+
+        cout << "made move after " << timer.elapsedMilis() << " milis" << endl;
+
+        return mv;
     }
 
     void run() {
