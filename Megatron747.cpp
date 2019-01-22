@@ -44,7 +44,13 @@ class Grid {
     VVS s;
     queue< Cell >unstable;
 
-    int vs[DIM][DIM];
+    int cnt[2];
+    /// R -> 0
+    /// G -> 1
+    int charToInt(char c) {
+        assert(c=='R'||c=='G');
+        return c=='G';
+    }
 
     bool isValidCell(const Cell& p) {
         return 0 <= p.x && p.x < DIM && 0 <= p.y && p.y < DIM;
@@ -78,6 +84,7 @@ class Grid {
 
             if (react==atom) {
                 s[p.x][p.y] = "No";
+                cnt[charToInt(cur)]--;
             } else {
                 int tmp = atom-react;
                 if (tmp >= react) unstable.push(p);
@@ -96,16 +103,26 @@ class Grid {
 
 public:
     Grid(VVS s) : s(s) {
+        clearCount();
+    }
 
+    void clearCount() {
+        cnt[0] = cnt[1] = 0;
     }
 
     void addAtom(Cell p, char cur, bool fromUpdate) {
+        int player = charToInt(cur);
         if (s[p.x][p.y]=="No") {
             s[p.x][p.y][0] = cur;
             s[p.x][p.y][1] = '1';
+            cnt[player]++;
             return;
         }
-        if (s[p.x][p.y][0]!=cur) assert(fromUpdate);
+        if (s[p.x][p.y][0]!=cur) {
+            assert(fromUpdate);
+            cnt[player]++;
+            cnt[player^1]--;
+        }
         s[p.x][p.y][0] = cur;
         s[p.x][p.y][1]++;
         if (neighbourCount(p)==s[p.x][p.y][1]-'0') {
@@ -116,6 +133,7 @@ public:
 
     void setCell(int i, int j, string str) {
         s[i][j] = str;
+        if (s[i][j]!="No") cnt[charToInt(s[i][j][0])]++;
     }
 
     int score1(char player) {
@@ -148,17 +166,7 @@ public:
     }
 
     bool gameEnded() {
-        char cur = 'R';
-        char other = 'G';
-        int cc = 0;
-        int oc = 0;
-        for (VS v : s) {
-            for (string p : v) {
-                if (p[0]==cur) cc++;
-                else if (p[0]==other) oc++;
-            }
-        }
-        return cc==0||oc==0;
+        return cnt[0]==0||cnt[1]==0;
     }
 
     int getHashValue() {
@@ -176,7 +184,7 @@ public:
 };
 
 const int MIN_DEPTH = 2;
-const int MAX_DEPTH = 5;
+const int MAX_DEPTH = 4;
 const int MAX_KILL = 10;
 
 char otherPlayer(char now)
@@ -206,15 +214,15 @@ public:
     }
 };
 
-struct Info {
-    Cell bestMove;
-    int score, alpha, beta;
-    Info() {}
-    Info(Cell bestMove, int score, int alpha, int beta) :
-        bestMove(bestMove), score(score), alpha(alpha), beta(beta) {
-
-    }
-};
+//struct Info {
+//    Cell bestMove;
+//    int score, alpha, beta;
+//    Info() {}
+//    Info(Cell bestMove, int score, int alpha, int beta) :
+//        bestMove(bestMove), score(score), alpha(alpha), beta(beta) {
+//
+//    }
+//};
 
 class Megatron747 {
     const int HASH_OFFSET = 2;
@@ -225,10 +233,12 @@ class Megatron747 {
     char me, other;
     Grid gr;
 
-    vector<Cell>killerMoves[MAX_DEPTH+2];
-    vector<int>efficiency[MAX_DEPTH+2];
+    vector<Cell>killerMoves[MAX_DEPTH];
+    vector<int>efficiency[MAX_DEPTH];
 
-    Info ttable[2][MAX_DEPTH+2][MAX_HASH];
+    Cell ttable[2][MAX_DEPTH][MAX_HASH];
+
+    int times[MAX_DEPTH], calc[MAX_DEPTH];
 
     void addKill(Cell c, int depth) {
 //        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
@@ -291,7 +301,7 @@ class Megatron747 {
 
 
     void clearShit() {
-        for (int i = 0; i <= MAX_DEPTH; i++) {
+        for (int i = 0; i < MAX_DEPTH; i++) {
             killerMoves[i].clear();
             efficiency[i].clear();
         }
@@ -306,6 +316,7 @@ class Megatron747 {
             in.close();
             return false;
         }
+        gr.clearCount();
         cout << "reading" << endl;
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
@@ -330,21 +341,20 @@ class Megatron747 {
 
     int allowedDepth;
 
-    void getMoves(Grid &gr, int depth, vector<Move> &moves) {
+    void getMoves(Grid &gr, int boardHash, int depth, vector<Move> &moves) {
         int _v = depth&1;
         char currentPlayer;
 
         if (_v) currentPlayer = me;
         else currentPlayer = other;
 
-
-        int boardHash = gr.getHashValue();
+        int height = allowedDepth-1-depth;
 
         Cell tt;
-        for (int idx = MAX_DEPTH-1; idx >= 0; idx--) {
-            Info in = ttable[_v][idx][boardHash];
-            if (in.bestMove.x==-1) continue;
-            tt = in.bestMove;
+        for (int idx = MAX_DEPTH-1; idx >= height; idx--) {
+            Cell in = ttable[_v][idx][boardHash];
+            if (in.x==-1) continue;
+            tt = in;
             break;
         }
 
@@ -383,22 +393,8 @@ class Megatron747 {
         int boardHash = gr.getHashValue();
         int height = allowedDepth-1-depth;
 
-//        if (height >= HASH_OFFSET) {
-//            height -= HASH_OFFSET;
-//            int idx;
-//            for (idx = MAX_DEPTH; idx >= height; idx--) {
-//                if (ttable[_v][idx][boardHash].bestMove.x!=-1) {
-//                    Info in = ttable[_v][idx][boardHash];
-//                    if (in.alpha >= in.beta) return in.score;
-//                    if (_v) alpha = max(alpha, in.alpha);
-//                    else beta = min(beta, in.beta);
-//                    break;
-//                }
-//            }
-//        }
-
         vector<Move>moves;
-        getMoves(gr, depth, moves);
+        getMoves(gr, boardHash, depth, moves);
 
         Cell bestMove;
         int mx = -MAX_SCORE, mn = MAX_SCORE;
@@ -433,16 +429,10 @@ class Megatron747 {
         }
 
         if (_v)  {
-//            if (height >= HASH_OFFSET) {
-                ttable[1][height][boardHash] =
-                    Info(bestMove, mx, alpha, beta);
-//            }
+            ttable[1][height][boardHash] = bestMove;
             return alpha;
         } else {
-//            if (height >= HASH_OFFSET) {
-                ttable[0][height][boardHash] =
-                    Info(bestMove, mn, alpha, beta);
-//            }
+            ttable[0][height][boardHash] = bestMove;
             return beta;
         }
     }
@@ -470,8 +460,11 @@ class Megatron747 {
             }
         }
 
-        cout << "depth " << depth << " max score " << mx << " found "
-            << vc.size() << " cells" << endl;
+        cout << "depth " << depth << " max score " << mx << " found " << vc.size()
+                << " cells using " << timer.elapsedMilis() << " milis" << endl;
+
+        times[depth] += timer.elapsedMilis();
+        calc[depth]++;
 
         if (vc.size()==0) vc.push_back(bot0());
         int idx = rand()%((int)vc.size());
@@ -486,12 +479,19 @@ class Megatron747 {
         int depth = 0;
         Cell bestMove = bot21(depth);
 
-        while (!timer.timesUp() && ++depth <= MAX_DEPTH) {
+        while (!timer.timesUp() && ++depth < MAX_DEPTH) {
             Cell tmp = bot21(depth);
             if (timer.timesUp()) break;
             cout << "went " << depth << " steps deeper!" << endl;
             bestMove = tmp;
         }
+
+        for (int i = 0; i < depth; i++) {
+            if (calc[i]==0) continue;
+            cout << i << "->" << fixed << setprecision(2) << 1.0*times[i]/calc[i] << " ";
+        }
+        cout << endl;
+
         return bestMove;
     }
 
