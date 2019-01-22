@@ -102,6 +102,7 @@ public:
             s[p.x][p.y][1] = '1';
             return;
         }
+        if (s[p.x][p.y][0]!=cur) assert(fromUpdate);
         s[p.x][p.y][0] = cur;
         s[p.x][p.y][1]++;
         if (neighbourCount(p)==s[p.x][p.y][1]-'0') {
@@ -199,7 +200,7 @@ class Megatron747 {
     vector<Cell>killerMoves[MAX_DEPTH+2];
     vector<int>efficiency[MAX_DEPTH+2];
 
-    void updateKill(Cell c, int depth) {
+    void addKill(Cell c, int depth) {
 //        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
         for (int i = 0; i < killerMoves[depth].size(); i++) {
             if (killerMoves[depth][i]==c) {
@@ -223,6 +224,17 @@ class Megatron747 {
         killerMoves[depth][mnid] = c;
         efficiency[depth][mnid] = 1;
     }
+
+    void removeKill(Cell c, int depth) {
+//        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
+        for (int i = 0; i < killerMoves[depth].size(); i++) {
+            if (killerMoves[depth][i]==c) {
+                efficiency[depth][i]--;
+                return;
+            }
+        }
+    }
+
 
     void clearKill() {
         for (int i = 0; i <= MAX_DEPTH; i++) {
@@ -264,110 +276,6 @@ class Megatron747 {
 
     int allowedDepth;
 
-    int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
-        /// greedily make move to the cell which
-        /// maximizes score2
-
-        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
-            return gr.score1(me);
-        }
-
-        set<Cell>done;
-        for (int i = 0; i < killerMoves[depth].size(); i++) {
-            Cell k = killerMoves[depth][i];
-            if (gr.isEmpty(k.x, k.y)||gr.getPlayer(k.x, k.y)==other) {
-                done.insert(k);
-
-                Grid tmp(gr);
-                tmp.addAtom(k, other, false);
-
-                int score = goDeeperMax(tmp, depth+1, alpha, beta);
-
-                if (score < beta) beta = score;
-                if (alpha >= beta) {
-                    efficiency[depth][i]++;
-                    return beta;
-                } else {
-                    efficiency[depth][i]--;
-                }
-            }
-        }
-
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==other) {
-                    Cell now = Cell(i, j);
-                    if (done.count(now) > 0) continue;
-
-                    Grid tmp(gr);
-                    tmp.addAtom(now, other, false);
-
-                    int score = goDeeperMax(tmp, depth+1, alpha, beta);
-
-                    if (score < beta) beta = score;
-                    if (alpha >= beta) {
-                        updateKill(now, depth);
-                        return beta;
-                    }
-                }
-            }
-        }
-        return beta;
-    }
-
-
-    int goDeeperMax(Grid& gr, int depth, int alpha, int beta) {
-        /// greedily make move to the cell which
-        /// maximizes score1
-        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
-            return gr.score1(me);
-        }
-
-        set<Cell>done;
-        for (int i = 0; i < killerMoves[depth].size(); i++) {
-            Cell k = killerMoves[depth][i];
-            if (gr.isEmpty(k.x, k.y)||gr.getPlayer(k.x, k.y)==me) {
-                done.insert(k);
-
-                Grid tmp(gr);
-                tmp.addAtom(k, me, false);
-
-                int score = goDeeperMin(tmp, depth+1, alpha, beta);
-
-                if (score > alpha) alpha = score;
-                if (alpha >= beta) {
-                    efficiency[depth][i]++;
-                    return alpha;
-                } else {
-                    efficiency[depth][i]--;
-                }
-            }
-        }
-
-
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
-                    Cell now = Cell(i, j);
-                    if (done.count(now) > 0) continue;
-
-                    Grid tmp(gr);
-                    tmp.addAtom(now, me, false);
-
-                    int score = goDeeperMin(tmp, depth+1, alpha, beta);
-
-                    if (score > alpha) alpha = score;
-                    if (alpha >= beta) {
-                        updateKill(now, depth);
-                        return alpha;
-                    }
-                }
-            }
-        }
-        return alpha;
-    }
-
-
     void getMoves(Grid &gr, int depth, vector<Move> &moves) {
         char currentPlayer;
         if (depth&1) currentPlayer = me;
@@ -387,7 +295,42 @@ class Megatron747 {
         sort(moves.begin(), moves.end());
     }
 
-    typedef pair<Cell,int>PCI;
+    int heuristic(Grid& gr, int depth, int alpha, int beta) {
+        /// greedily make move to the cell which
+        /// maximizes score1
+        char currentPlayer;
+        if (depth&1) currentPlayer = me;
+        else currentPlayer = other;
+
+        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
+            return gr.score1(me);
+        }
+
+        vector<Move>moves;
+        getMoves(gr, depth, moves);
+
+        for (Move m : moves) {
+            Cell now = m.c;
+            Grid tmp(gr);
+            tmp.addAtom(now, currentPlayer, false);
+
+            int score = heuristic(tmp, depth+1, alpha, beta);
+
+            if (currentPlayer==me&&score>alpha) alpha = score;
+            if (currentPlayer!=me&&score<beta)  beta  = score;
+
+            if (alpha >= beta) {
+                addKill(now, depth);
+                break;
+            } else {
+                removeKill(now, depth);
+            }
+        }
+
+        if (currentPlayer==me)  return alpha;
+        else                    return beta;
+    }
+
     Cell bot21(int depth = MIN_DEPTH) {
         /// greedily make move to the cell which
         /// maximizes score2
@@ -399,7 +342,7 @@ class Megatron747 {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j), me, false);
-                    int score = goDeeperMin(tmp, 0, -MAX_SCORE, MAX_SCORE);
+                    int score = heuristic(tmp, 0, -MAX_SCORE, MAX_SCORE);
                     if (score > mx) {
                         mx = score;
                         vc.clear();
@@ -418,7 +361,6 @@ class Megatron747 {
 
         return vc[idx];
     }
-
 
     Cell bot31() {
         /// iterative deepening of bot21
