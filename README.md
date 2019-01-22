@@ -6,8 +6,6 @@ bot0 -> plays randomly
 
 bot11 -> tries to maximize the score1() in exactly one move
 
-bot14 -> tries to maximize the scoreX() in exactly one move
-
-bot21 -> 3 steps deeper with bot11
+bot21 -> 2 steps deeper with bot11
 
 bot31 -> arbitrary steps deeper with bot21. The number of steps will be determined from time limit.
