@@ -4,9 +4,9 @@ Currently there are 5 bots implemented in Megatron747.cpp
 
 bot0 -> plays randomly
 
-bot11 -> tries to maximize the number of atoms in exactly one move
+bot11 -> tries to maximize the score1() in exactly one move
 
-bot14 -> tries to maximize the number of atoms in exactly one move
+bot14 -> tries to maximize the scoreX() in exactly one move
 
 bot21 -> 3 steps deeper with bot11
 
