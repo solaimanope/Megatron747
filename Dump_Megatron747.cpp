@@ -40,8 +40,13 @@ class Grid {
 
     VVS s;
     queue< Cell >unstable;
+    int cnt[2];
+    /// 0 for R
+    /// 1 for G
 
-    int vs[DIM][DIM];
+    int charToInt(char c) {
+        return c=='G';
+    }
 
     bool isValidCell(const Cell& p) {
         return 0 <= p.x && p.x < DIM && 0 <= p.y && p.y < DIM;
@@ -62,8 +67,9 @@ class Grid {
             loop++;
             if (loop > MAX_LOOP) {
                 cout << "Loop more than " << MAX_LOOP << endl;
-                return;
+                break;
             }
+
             assert(unstable.size() < DIM*DIM);
             Cell p = unstable.front();
             unstable.pop();
@@ -75,6 +81,7 @@ class Grid {
 
             if (react==atom) {
                 s[p.x][p.y] = "No";
+                cnt[charToInt(cur)]--;
             } else {
                 int tmp = atom-react;
                 if (tmp >= react) unstable.push(p);
@@ -87,19 +94,31 @@ class Grid {
                 addAtom(d, cur, true);
             }
         }
+        while (unstable.size()) unstable.pop();
     }
 
 
 public:
     Grid(VVS s) : s(s) {
+        clearCount();
+    }
 
+    void clearCount() {
+        cnt[0] = cnt[1] = 0;
     }
 
     void addAtom(Cell p, char cur, bool fromUpdate = false) {
+        int player = charToInt(cur);
         if (s[p.x][p.y]=="No") {
             s[p.x][p.y][0] = cur;
             s[p.x][p.y][1] = '1';
+            cnt[player]++;
             return;
+        }
+        if (s[p.x][p.y][0]!=cur) {
+            assert(fromUpdate);
+            cnt[player^1]--;
+            cnt[player]++;
         }
         s[p.x][p.y][0] = cur;
         s[p.x][p.y][1]++;
@@ -111,6 +130,37 @@ public:
 
     void setCell(int i, int j, string str) {
         s[i][j] = str;
+        if (s[i][j]!="No") cnt[charToInt(s[i][j][0])]++;
+    }
+
+    int scoreX(char player) {
+        assert(player=='R'||player=='G');
+        int cp[2];
+        int xp[2];
+        cp[0] = cp[1] = xp[0] = xp[1] = 0;
+
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (s[i][j]=="No") continue;
+                char c = s[i][j][0];
+                cp[player==c]++;
+                if (s[i][j][1]-'0'==neighbourCount(Cell(i, j))-1) {
+                    xp[player==c]++;
+                }
+            }
+        }
+
+        if (cp[1] > 0 && cp[0]==0) {
+//            cout << "+" << player << endl;
+//            printBoard();
+            return MAX_SCORE;
+        }
+        if (cp[0] > 0 && cp[1]==0) {
+//            cout << "-" << player << endl;
+//            printBoard();
+            return -MAX_SCORE;
+        }
+        return cp[1]-cp[0]+xp[1]-xp[0];
     }
 
     int score1(char player) {
@@ -143,21 +193,20 @@ public:
     }
 
     bool gameEnded() {
-        char cur = 'R';
-        char other = 'G';
-        int cc = 0;
-        int oc = 0;
-        for (VS v : s) {
-            for (string p : v) {
-                if (p[0]==cur) cc++;
-                else if (p[0]==other) oc++;
+        return cnt[0]==0||cnt[1]==0;
+    }
+
+    void printBoard() {
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                cout << s[i][j] << " ";
             }
+            cout << endl;
         }
-        return cc==0||oc==0;
     }
 };
 
-const int MIN_DEPTH = 2;
+const int MIN_DEPTH = 1;
 const int MAX_DEPTH = 5;
 const int MAX_KILL = 10;
 
@@ -223,7 +272,7 @@ class Megatron747 {
         efficiency[depth][mnid] = 1;
     }
 
-    void clearKill() {
+    void clearShit() {
         for (int i = 0; i <= MAX_DEPTH; i++) {
             killerMoves[i].clear();
             efficiency[i].clear();
@@ -239,6 +288,7 @@ class Megatron747 {
             in.close();
             return false;
         }
+        gr.clearCount();
         cout << "reading" << endl;
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
@@ -262,6 +312,12 @@ class Megatron747 {
     }
 
     int allowedDepth;
+
+//    int evaluate(Grid& gr, int depth, int alpha, int beta) {
+//
+//        for (int i = 0; i < )
+//
+//    }
 
     int goDeeperMin(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
@@ -366,7 +422,6 @@ class Megatron747 {
         return alpha;
     }
 
-
     void getMoves(Grid &gr, int depth, vector<Move> &moves) {
         char currentPlayer;
         if (depth&1) currentPlayer = me;
@@ -384,6 +439,35 @@ class Megatron747 {
         }
 
         sort(moves.begin(), moves.end());
+    }
+
+    int negaMax(Grid &gr, int depth, int alpha, int beta) {
+        char currentPlayer;
+        if (depth&1) currentPlayer = me;
+        else currentPlayer = other;
+
+        if (depth==allowedDepth||gr.gameEnded()||timer.timesUp()) {
+            return gr.scoreX(otherPlayer(currentPlayer));
+        }
+
+        vector< Move >moves;
+        getMoves(gr, depth, moves);
+
+        if (moves.empty()) cout << "No moves!!!" << endl;
+
+        int score = -MAX_SCORE*2;
+        for (Move m : moves) {
+            Grid tmp(gr);
+            gr.addAtom(m.c, currentPlayer);
+            int cur = -negaMax(tmp, depth+1, -beta, -alpha);
+
+            if (cur > score) score = cur;
+            if (score > alpha) alpha = score;
+            if (alpha >= beta) {
+                return alpha;
+            }
+        }
+        return score;
     }
 
     typedef pair<Cell,int>PCI;
@@ -418,6 +502,36 @@ class Megatron747 {
         return vc[idx];
     }
 
+    Cell bot24(int depth = MIN_DEPTH) {
+        allowedDepth = depth;
+        vector<Cell>vc;
+        int mx = -MAX_SCORE;
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
+                    Grid tmp(gr);
+                    tmp.addAtom(Cell(i, j), me);
+                    int score = negaMax(tmp, 0, -MAX_SCORE, MAX_SCORE);
+                    if (score > mx) {
+                        mx = score;
+                        vc.clear();
+                    }
+                    if (mx==score) vc.emplace_back(i, j);
+                }
+            }
+        }
+
+        cout << "depth " << depth << " max score " << mx << " found "
+            << vc.size() << " cells" << endl;
+
+        if (vc.size()==0) vc.push_back(bot0());
+        int idx = rand()%((int)vc.size());
+//        cout << idx << endl;
+
+        return vc[idx];
+    }
+
+
 
     Cell bot31() {
         /// iterative deepening of bot21
@@ -432,6 +546,52 @@ class Megatron747 {
             bestMove = tmp;
         }
         return bestMove;
+    }
+
+
+    Cell bot34() {
+        /// iterative deepening of bot21
+
+        int depth = MIN_DEPTH;
+        Cell bestMove = bot24(depth);
+
+        while (!timer.timesUp() && ++depth <= MAX_DEPTH) {
+            Cell tmp = bot24(depth);
+            if (timer.timesUp()) break;
+            cout << "went " << depth << " steps deeper!" << endl;
+            bestMove = tmp;
+        }
+        return bestMove;
+    }
+
+
+    Cell bot14() {
+        /// greedily make move to the cell which
+        /// maximizes my color
+        vector<Cell>vc;
+        int mx = -MAX_SCORE*2;
+        for (int i = 0; i < DIM; i++) {
+            for (int j = 0; j < DIM; j++) {
+                if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
+                    Grid tmp(gr);
+                    tmp.addAtom(Cell(i, j), me);
+                    int score1 = tmp.scoreX(me);
+//                    cout << score1 << " for " << i << " " << j << endl;
+                    if (score1 > mx) {
+                        mx = score1;
+                        vc.clear();
+                    }
+                    if (mx==score1) vc.emplace_back(i, j);
+                }
+            }
+        }
+
+        cout << "max score " << mx << " found "
+            << vc.size() << " cells" << endl;
+
+        assert(vc.size() > 0);
+        int idx = rand()%((int)vc.size());
+        return vc[idx];
     }
 
     Cell bot11() {
@@ -479,13 +639,16 @@ class Megatron747 {
 
     Cell makeMove() {
         timer.startTimer();
-        clearKill();
+        clearShit();
 
         Cell mv;
         if (botVersion==0) mv = bot0();
         else if (botVersion==11) mv = bot11();
+        else if (botVersion==14) mv = bot14();
         else if (botVersion==21) mv = bot21();
+        else if (botVersion==24) mv = bot24();
         else if (botVersion==31) mv = bot31();
+        else if (botVersion==34) mv = bot34();
         else assert(false);
 
         cout << "made move after " << timer.elapsedMilis() << " milis" << endl;
@@ -505,8 +668,7 @@ public:
     Megatron747(char me, int botVersion):gr(VVS(DIM, VS(DIM))) {
         this->me = me;
         this->botVersion = botVersion;
-        if (me=='R') other = 'G';
-        else other = 'R';
+        this->other = otherPlayer(this->me);
         run();
     }
 };
@@ -522,3 +684,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
