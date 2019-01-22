@@ -205,6 +205,17 @@ class Megatron747 {
         for (int i = 0; i < killerMoves[depth].size(); i++) {
             if (killerMoves[depth][i]==c) {
                 efficiency[depth][i]++;
+
+                /// push the more efficient killer move to the front
+                for (int j = i-1; j >= 0; j--) {
+                    if (efficiency[depth][j] < efficiency[depth][j+1]) {
+                        swap(killerMoves[depth][j+1], killerMoves[depth][j]);
+                        swap(efficiency[depth][j+1], efficiency[depth][j]);
+                    } else {
+                        break;
+                    }
+                }
+
                 return;
             }
         }
@@ -212,17 +223,9 @@ class Megatron747 {
         if (killerMoves[depth].size() < MAX_KILL) {
             killerMoves[depth].push_back(c);
             efficiency[depth].push_back(1);
-            return;
         }
-
-        int mnid = 0;
-        for (int i = 1; i < killerMoves[depth].size(); i++) {
-            if (efficiency[depth][i] < efficiency[depth][mnid]) {
-                mnid = i;
-            }
-        }
-        killerMoves[depth][mnid] = c;
-        efficiency[depth][mnid] = 1;
+        /// since all the killer moves have efficiency > 0
+        /// c is not considered as killer move
     }
 
     void removeKill(Cell c, int depth) {
@@ -230,9 +233,30 @@ class Megatron747 {
         for (int i = 0; i < killerMoves[depth].size(); i++) {
             if (killerMoves[depth][i]==c) {
                 efficiency[depth][i]--;
-                return;
+                /// push the less efficient killer move to the back
+                for (int j = i+1; j < killerMoves[depth].size(); j++) {
+                    if (efficiency[depth][j-1] < efficiency[depth][j]) {
+                        swap(killerMoves[depth][j-1], killerMoves[depth][j]);
+                        swap(efficiency[depth][j-1], efficiency[depth][j]);
+                    } else {
+                        break;
+                    }
+                }
+                if (efficiency[depth].back()==0) {
+                    killerMoves[depth].pop_back();
+                    efficiency[depth].pop_back();
+                }
             }
         }
+    }
+
+    int killerScore(Cell c, int depth) {
+        for (int i = 0; i < killerMoves[depth].size(); i++) {
+            if (killerMoves[depth][i]==c) {
+                return MAX_KILL-i;
+            }
+        }
+        return 0;
     }
 
 
@@ -287,6 +311,9 @@ class Megatron747 {
                     Move mv;
                     mv.c = Cell(i, j);
                     mv.strength = 0;
+
+                    mv.strength += killerScore(mv.c, depth);
+
                     moves.push_back(mv);
                 }
             }
