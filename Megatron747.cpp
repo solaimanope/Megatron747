@@ -152,21 +152,6 @@ public:
         if (cnt[v^1] > 0 && cnt[v]==0) return -MAX_SCORE;
 
         return atm[v];
-
-        int cp[2];
-        cp[0] = cp[1] = 0;
-
-        for (int i = 0; i < DIM; i++) {
-            for (int j = 0; j < DIM; j++) {
-                if (s[i][j]=="No") continue;
-                char c = s[i][j][0];
-                cp[player==c] += s[i][j][1]-'0';
-            }
-        }
-
-        if (cp[1] > 0 && cp[0]==0) return MAX_SCORE;
-        if (cp[0] > 0 && cp[1]==0) return -MAX_SCORE;
-        return cp[1];
     }
 
     bool isEmpty(int i, int j) {
@@ -198,8 +183,7 @@ public:
 };
 
 const int MIN_DEPTH = 2;
-const int MAX_DEPTH = 5;
-const int MAX_KILL = 10;
+const int MAX_DEPTH = 4;
 
 char otherPlayer(char now)
 {
@@ -208,7 +192,7 @@ char otherPlayer(char now)
 }
 
 class Timer {
-    const int TIME_LIMIT = 2500;
+    const int TIME_LIMIT = 2950;
     chrono::time_point<chrono::system_clock> start_time, current_time;
 
 public:
