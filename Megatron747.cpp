@@ -45,6 +45,7 @@ class Grid {
     queue< Cell >unstable;
 
     int cnt[2];
+    int atm[2];
     /// R -> 0
     /// G -> 1
     int charToInt(char c) {
@@ -108,10 +109,12 @@ public:
 
     void clearCount() {
         cnt[0] = cnt[1] = 0;
+        atm[0] = atm[1] = 0;
     }
 
     void addAtom(Cell p, char cur, bool fromUpdate) {
         int player = charToInt(cur);
+        if (fromUpdate==false) atm[player]++;
         if (s[p.x][p.y]=="No") {
             s[p.x][p.y][0] = cur;
             s[p.x][p.y][1] = '1';
@@ -122,6 +125,8 @@ public:
             assert(fromUpdate);
             cnt[player]++;
             cnt[player^1]--;
+            atm[player]     +=  s[p.x][p.y][1]-'0';
+            atm[player^1]   -=  s[p.x][p.y][1]-'0';
         }
         s[p.x][p.y][0] = cur;
         s[p.x][p.y][1]++;
@@ -133,11 +138,20 @@ public:
 
     void setCell(int i, int j, string str) {
         s[i][j] = str;
-        if (s[i][j]!="No") cnt[charToInt(s[i][j][0])]++;
+        if (s[i][j]!="No") {
+            cnt[charToInt(s[i][j][0])]++;
+            atm[charToInt(s[i][j][0])]  +=  s[i][j][1]-'0';
+        }
     }
 
     int score1(char player) {
         /// calculate score for bot1
+        int v = charToInt(player);
+
+        if (cnt[v] > 0 && cnt[v^1]==0) return MAX_SCORE;
+        if (cnt[v^1] > 0 && cnt[v]==0) return -MAX_SCORE;
+
+        return atm[v];
 
         int cp[2];
         cp[0] = cp[1] = 0;
@@ -184,7 +198,7 @@ public:
 };
 
 const int MIN_DEPTH = 2;
-const int MAX_DEPTH = 4;
+const int MAX_DEPTH = 5;
 const int MAX_KILL = 10;
 
 char otherPlayer(char now)
@@ -421,18 +435,18 @@ class Megatron747 {
             if (currentPlayer!=me&&score<beta)  beta  = score;
 
             if (alpha >= beta) {
-                addKill(now, depth);
+                if (!timer.timesUp()) addKill(now, depth);
                 break;
             } else {
-                removeKill(now, depth);
+                if (!timer.timesUp()) removeKill(now, depth);
             }
         }
 
         if (_v)  {
-            ttable[1][height][boardHash] = bestMove;
+            if (!timer.timesUp()) ttable[1][height][boardHash] = bestMove;
             return alpha;
         } else {
-            ttable[0][height][boardHash] = bestMove;
+            if (!timer.timesUp()) ttable[0][height][boardHash] = bestMove;
             return beta;
         }
     }
