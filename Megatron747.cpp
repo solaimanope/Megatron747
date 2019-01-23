@@ -228,97 +228,36 @@ public:
     }
 };
 
-//struct Info {
-//    Cell bestMove;
-//    int score, alpha, beta;
-//    Info() {}
-//    Info(Cell bestMove, int score, int alpha, int beta) :
-//        bestMove(bestMove), score(score), alpha(alpha), beta(beta) {
-//
-//    }
-//};
-
 class Megatron747 {
-    const int HASH_OFFSET = 2;
-
     Timer timer;
 
     int botVersion;
     char me, other;
     Grid gr;
 
-    vector<Cell>killerMoves[MAX_DEPTH];
-    vector<int>efficiency[MAX_DEPTH];
+    int killXP[MAX_DEPTH][DIM][DIM];
 
     Cell ttable[2][MAX_DEPTH][MAX_HASH];
 
     int times[MAX_DEPTH], calc[MAX_DEPTH];
 
     void addKill(Cell c, int depth) {
-//        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
-        for (int i = 0; i < killerMoves[depth].size(); i++) {
-            if (killerMoves[depth][i]==c) {
-                efficiency[depth][i]++;
-
-                /// push the more efficient killer move to the front
-                for (int j = i-1; j >= 0; j--) {
-                    if (efficiency[depth][j] < efficiency[depth][j+1]) {
-                        swap(killerMoves[depth][j+1], killerMoves[depth][j]);
-                        swap(efficiency[depth][j+1], efficiency[depth][j]);
-                    } else {
-                        break;
-                    }
-                }
-
-                return;
-            }
-        }
-
-        if (killerMoves[depth].size() < MAX_KILL) {
-            killerMoves[depth].push_back(c);
-            efficiency[depth].push_back(1);
-        }
-        /// since all the killer moves have efficiency > 0
-        /// c is not considered as killer move
+        killXP[depth][c.x][c.y]++;
+        return;
     }
 
     void removeKill(Cell c, int depth) {
-//        cout << "killer " << c.x << " " << c.y << " at " << depth << endl;
-        for (int i = 0; i < killerMoves[depth].size(); i++) {
-            if (killerMoves[depth][i]==c) {
-                efficiency[depth][i]--;
-                /// push the less efficient killer move to the back
-                for (int j = i+1; j < killerMoves[depth].size(); j++) {
-                    if (efficiency[depth][j-1] < efficiency[depth][j]) {
-                        swap(killerMoves[depth][j-1], killerMoves[depth][j]);
-                        swap(efficiency[depth][j-1], efficiency[depth][j]);
-                    } else {
-                        break;
-                    }
-                }
-                if (efficiency[depth].back()==0) {
-                    killerMoves[depth].pop_back();
-                    efficiency[depth].pop_back();
-                }
-            }
-        }
+        killXP[depth][c.x][c.y]--;
+        return;
     }
 
     int killerScore(Cell c, int depth) {
-        for (int i = 0; i < killerMoves[depth].size(); i++) {
-            if (killerMoves[depth][i]==c) {
-                return MAX_KILL-i;
-            }
-        }
-        return 0;
+        return killXP[depth][c.x][c.y];
     }
 
 
     void clearShit() {
-        for (int i = 0; i < MAX_DEPTH; i++) {
-            killerMoves[i].clear();
-            efficiency[i].clear();
-        }
+        memset(killXP, 0, sizeof killXP);
     }
 
     bool readFile() {
@@ -380,7 +319,7 @@ class Megatron747 {
                     mv.strength = 0;
 
                     mv.strength += killerScore(mv.c, depth);
-                    if (i==tt.x&&j==tt.y) mv.strength += MAX_KILL*2;
+                    if (i==tt.x&&j==tt.y) mv.strength += 1e8;
 
                     moves.push_back(mv);
                 }
@@ -390,7 +329,6 @@ class Megatron747 {
         sort(moves.begin(), moves.end());
     }
 
-    vector< Cell >stck;
     int heuristic(Grid& gr, int depth, int alpha, int beta) {
         /// greedily make move to the cell which
         /// maximizes score1
@@ -418,9 +356,7 @@ class Megatron747 {
             Grid tmp(gr);
             tmp.addAtom(now, currentPlayer, false);
 
-            stck.push_back(now);
             int score = heuristic(tmp, depth+1, alpha, beta);
-            stck.pop_back();
 
             if (currentPlayer==me&&score>mx) {
                 mx = score;
@@ -435,7 +371,7 @@ class Megatron747 {
             if (currentPlayer!=me&&score<beta)  beta  = score;
 
             if (alpha >= beta) {
-                if (!timer.timesUp()) addKill(now, depth);
+                addKill(now, depth);
                 break;
             } else {
                 if (!timer.timesUp()) removeKill(now, depth);
@@ -443,10 +379,12 @@ class Megatron747 {
         }
 
         if (_v)  {
-            if (!timer.timesUp()) ttable[1][height][boardHash] = bestMove;
+            if (alpha >= beta || !timer.timesUp())
+                ttable[1][height][boardHash] = bestMove;
             return alpha;
         } else {
-            if (!timer.timesUp()) ttable[0][height][boardHash] = bestMove;
+            if (alpha >= beta || !timer.timesUp())
+                ttable[0][height][boardHash] = bestMove;
             return beta;
         }
     }
@@ -462,9 +400,7 @@ class Megatron747 {
                 if (gr.isEmpty(i, j)||gr.getPlayer(i, j)==me) {
                     Grid tmp(gr);
                     tmp.addAtom(Cell(i, j), me, false);
-                    stck.push_back(Cell(i, j));
                     int score = heuristic(tmp, 0, -MAX_SCORE, MAX_SCORE);
-                    stck.pop_back();
                     if (score > mx) {
                         mx = score;
                         vc.clear();
