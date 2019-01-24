@@ -34,8 +34,10 @@ struct Move {
 vector< Cell >dir = {Cell(1, 0), Cell(-1, 0), Cell(0, 1), Cell(0, -1)};
 const int DIM = 8;
 const int MAX_SCORE = 10000;
+//const int MAX_HASH = 10000019;
+const int MAX_HASH = 1000003;
 //const int MAX_HASH = 100003;
-const int MAX_HASH = 10007;
+//const int MAX_HASH = 10007;
 
 class Grid {
     const int MAX_LOOP = 1000;
@@ -122,7 +124,7 @@ public:
             return;
         }
         if (s[p.x][p.y][0]!=cur) {
-            assert(fromUpdate);
+//            assert(fromUpdate);
             cnt[player]++;
             cnt[player^1]--;
             atm[player]     +=  s[p.x][p.y][1]-'0';
@@ -169,7 +171,7 @@ public:
     }
 
     int getHashValue() {
-        int ans = 0;
+        long long ans = 0;
         for (int i = 0; i < DIM; i++) {
             for (int j = 0; j < DIM; j++) {
                 for (char c : s[i][j]) {
@@ -453,7 +455,7 @@ class Megatron747 {
         cout << "max score " << mx << " found "
             << vc.size() << " cells" << endl;
 
-        assert(vc.size() > 0);
+        if (vc.size()==0) vc.push_back(bot0());
         int idx = rand()%((int)vc.size());
         return vc[idx];
     }
@@ -481,7 +483,10 @@ class Megatron747 {
         else if (botVersion==11) mv = bot11();
         else if (botVersion==21) mv = bot21();
         else if (botVersion==31) mv = bot31();
-        else assert(false);
+        else {
+//            assert(false);
+            mv = bot0();
+        }
 
         cout << "made move after " << timer.elapsedMilis() << " milis" << endl;
 
@@ -514,7 +519,11 @@ int main(int argc, char *argv[])
 
     int v = DEFAULT_BOT;
     if (argc > 2) v = atoi(argv[2]);
-    Megatron747 mt747(argv[1][0], v);
+
+//    Megatron747 mt747(argv[1][0], v);
+
+    Megatron747 *mt747 = new Megatron747(argv[1][0], v);
+    delete mt747;
 
     return 0;
 }
