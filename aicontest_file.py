@@ -99,8 +99,8 @@ def draw_reaction(cubes):
 
 def draw_sphere(radius, is_red):
     points = np.zeros((105, 105, 3))
-    stack = 5
-    slices = 5
+    stack = 20
+    slices = 20
     for i in range(stack+1):
         h = radius*math.sin(float((i/stack))*(math.pi/2))
         r = radius*math.cos(float((i/stack))*(math.pi/2))
