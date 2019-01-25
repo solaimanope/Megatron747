@@ -1,4 +1,4 @@
-# Megatron747
+# Source code: Megatron747.cpp
 
 Currently there are 5 bots implemented in Megatron747.cpp
 
