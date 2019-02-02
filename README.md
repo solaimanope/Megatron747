@@ -14,8 +14,8 @@ bot0 -> plays randomly
 
 bot11 -> tries to maximize the score1() in exactly one move. score1() returns the number of atoms of the current player in the grid.
 
-bot21 -> went 2 steps deeper with minimax (obviously alpha beta pruning was in action), using score1() as heuristic
+bot21 -> went fixed steps deeper with minimax (obviously alpha beta pruning was in action), using score1() as heuristic
 
-bot31 -> went arbitrary steps deeper with bot21. The number of steps will be determined from time limit. bot31 is basically iterative deepening of bot21. 
+bot31 -> went arbitrary steps deeper with bot21. The number of steps will be determined from time limit, which is currently set as 2950 ms. Timer class was written to avoid getting Time Limit Exceeded. bot31 is basically iterative deepening of bot21.
 
-bot31 is the bot used by default.
+bot31 is the bot used by default for playing unless the bot to be used is specified in the command line argument.
