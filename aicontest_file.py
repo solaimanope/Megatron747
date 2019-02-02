@@ -132,8 +132,8 @@ def draw_spheres():
                 glPushMatrix()
                 glTranslatef((i - 4)*3, (j - 4)*3, 0)
 
-                #glRotatef(angles[i][j], 0, 0, 1)
-                #angles[i][j] = (angles[i][j] + 5) % 360
+                glRotatef(angles[i][j], 0, 0, 1)
+                angles[i][j] = (angles[i][j] + 5) % 360
 
                 if grid[i][j][1] == '1':
                     draw_sphere(.7, sphere_color[grid[i][j][0]])
